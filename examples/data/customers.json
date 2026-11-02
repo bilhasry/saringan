@@ -1,0 +1,22 @@
+{
+  "customers": [
+    {
+      "id": 1,
+      "name": "Ada Lovelace",
+      "email": "ada@example.com",
+      "ssn": "123-45-6789",
+      "card": "4111 1111 1111 1111",
+      "notes": "Call after 5pm",
+      "credentials": { "password": "hunter2", "api_key": "sk-live-9f8e7d" }
+    },
+    {
+      "id": 2,
+      "name": "Grace Hopper",
+      "email": "grace@example.com",
+      "ssn": "987-65-4321",
+      "card": "4000000000000002",
+      "notes": "Prefers email",
+      "credentials": { "password": "nimitz", "api_key": "sk-live-1a2b3c" }
+    }
+  ]
+}

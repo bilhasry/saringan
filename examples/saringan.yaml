@@ -1,0 +1,100 @@
+# saringan example configuration — demonstrates every feature:
+#   * 6 integration types (file, http, postgres, mysql, env, stdin)
+#   * censor actions: replace, mask, redact, hash, truncate, drop
+#   * policies that bind sources to rules for a given consumer
+version: 1
+
+sources:
+  customers-file:
+    type: file
+    path: ./data/customers.json
+    format: json
+
+  customers-api:
+    type: http
+    url: https://api.example.com/v1/customers
+    method: GET
+    headers:
+      Accept: application/json
+    auth:
+      type: bearer
+      token: ${API_TOKEN}
+    timeout: 15s
+
+  crm-db:
+    type: postgres
+    dsn: ${DB_DSN}                        # e.g. postgres://user:pass@host/db
+    query: "select id, name, email, ssn, card from customers limit 100"
+
+  orders-db:
+    type: mysql
+    dsn: ${MYSQL_DSN}
+    query: "select id, customer_email, amount from orders limit 100"
+
+  secrets-env:
+    type: env
+    keys: [API_TOKEN, DB_DSN, OPENAI_API_KEY]
+
+  raw-stdin:
+    type: stdin
+
+rules:
+  # '*' string replacement on any field containing "ssn"
+  - name: hide-ssn
+    description: Never leak social security numbers
+    field: "*ssn*"
+    action: replace
+    with: "*hidden*"
+
+  # keep the last 4 digits of every credit-card-shaped number
+  - name: mask-cards
+    description: Mask card numbers, keep last 4 for recognition
+    pattern: '\b(?:\d[ -]?){13,19}\b'
+    action: mask
+    keep: 4
+
+  # remove the field entirely (set to null)
+  - name: hide-passwords
+    field: "password"
+    action: redact
+
+  # replace with a stable hash — joins still work, values don't leak
+  - name: hash-emails
+    pattern: '[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'
+    action: hash
+
+  # drop the key from the output structure
+  - name: drop-api-keys
+    field: "*api_key*"
+    action: drop
+
+  # secrets exposed via the env integration never leave saringan
+  - name: drop-tokens
+    field: "*token*"
+    action: drop
+
+  - name: drop-dsns
+    field: "*dsn*"
+    action: drop
+
+  # structural rule using a dot path with wildcards
+  - name: hide-notes
+    description: Free-text notes may contain anything
+    path: "*.notes"
+    action: replace
+    with: "[note hidden]"
+
+policies:
+  agent-safe:
+    description: Everything an AI agent may see
+    sources: [customers-file, customers-api, secrets-env]
+    rules: [hide-ssn, mask-cards, hide-passwords, hash-emails, drop-api-keys, drop-tokens, drop-dsns, hide-notes]
+    on_error: deny            # fail-closed: abort if a source is unavailable
+    format: json
+
+  internal-debug:
+    description: Looser policy for internal tooling — only mask cards
+    sources: [customers-file]
+    rules: [mask-cards]
+    on_error: allow
+    format: json
